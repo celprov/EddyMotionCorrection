@@ -106,16 +106,23 @@ class TensorModel:
         from dipy.reconst.dti import TensorModel
 
         self._nb_threads = nb_threads
-
-        self._S0 = np.clip(
-            S0.astype("float32") / S0.max(),
-            a_min=1e-5,
-            a_max=1.0,
-        )
+        
+        self._S0 = None
+        if S0 is not None:
+            self._S0 = np.clip(
+                S0.astype("float32") / S0.max(),
+                a_min=1e-5,
+                a_max=1.0,
+            )
         self._mask = mask
-        # Create the mask chunks
-        self._mask_chunks = np.split(self._mask, self._nb_threads, axis=2)
+        if mask is None and S0 is not None:
+            self._mask = self._S0 > np.percentile(self._S0, 35)
 
+        if self._mask is not None:
+            self._S0 = self._S0[self._mask.astype(bool)]
+            # Create the mask chunks
+            self._mask_chunks = np.split(self._mask, self._nb_threads, axis=2)
+        
         kwargs = {
             k: v
             for k, v in kwargs.items()
@@ -175,8 +182,10 @@ class TensorModel:
             event_loop.close()
 
     def fit(self, data, **kwargs):
-        """Clean-up permitted args and kwargs, and call model's fit."""
-        self._model = self._model.fit(data, mask=self._mask)
+        """Call model's fit."""
+        if self._mask is not None:
+            data = data[self._mask, ...]
+        self._model = self._model.fit(data)
 
     def predict_chunk(self, gradient_chunk, index, step=None):
         """Propagate model parameters and call predict for chunk."""
@@ -224,11 +233,19 @@ class TensorModel:
 
     def predict(self, gradient, step=None, **kwargs):
         """Propagate model parameters and call predict."""
-        return self._model.predict(
-            _rasb2dipy(gradient),
-            S0=self._S0,
-            step=step,
+        predicted = np.squeeze(
+            self._model.predict(
+                _rasb2dipy(gradient),
+                S0=self._S0,
+                step=step,
+            )
         )
+        if predicted.ndim == 3:
+            return predicted
+
+        retval = np.zeros_like(self._mask, dtype="float32")
+        retval[self._mask, ...] = predicted
+        return retval
 
 
 class DKIModel:
