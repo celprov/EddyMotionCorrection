@@ -196,8 +196,9 @@ class TensorModel:
         print('exiting')
 
     @staticmethod
-    def predict_chunk(model_chunk, S0_chunk, gradient, step=None):
+    def predict_chunk(index, model_chunk, S0_chunk, gradient, step=None):
         """Call predict for chunk and return the predicted diffusion signal."""
+        print(f'Predict chunk {index}...')
         return model_chunk.predict(
             _rasb2dipy(gradient),
             S0=S0_chunk,
@@ -219,6 +220,7 @@ class TensorModel:
         predict_tasks = [
                 loop.run_in_executor(executor,
                                      self.predict_chunk,
+                                     i,
                                      self._model_chunks[i],
                                      self._S0_chunks[i],
                                      gradient, step)
