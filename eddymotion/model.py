@@ -143,17 +143,17 @@ class TensorModel:
             self._S0_chunks = np.split(self._S0, self._n_threads, axis=2)
 
         kwargs = {
-                k: v
-                for k, v in kwargs.items()
-                if k
-                   in (
-                           "min_signal",
-                           "return_S0_hat",
-                           "fit_method",
-                           "weighting",
-                           "sigma",
-                           "jac",
-                   )
+            k: v
+            for k, v in kwargs.items()
+            if k
+            in (
+                "min_signal",
+                "return_S0_hat",
+                "fit_method",
+                "weighting",
+                "sigma",
+                "jac",
+            )
         }
 
         # Create a TensorModel for each chunk
