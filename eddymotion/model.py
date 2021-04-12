@@ -126,9 +126,9 @@ class TensorModel:
         self._S0_chunks = None
         if S0 is not None:
             self._S0 = np.clip(
-                    S0.astype("float32") / S0.max(),
-                    a_min=1e-5,
-                    a_max=1.0,
+                S0.astype("float32") / S0.max(),
+                a_min=1e-5,
+                a_max=1.0,
             )
             self._S0_chunks = np.split(S0, self._n_threads, axis=2)
 
