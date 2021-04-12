@@ -24,7 +24,7 @@ class ModelFactory:
             An array representing the gradient table in RAS+B format.
         model : :obj:`str`
             Diffusion model.
-            Options: ``"3DShore"``, ``"SFM"``, ``"Tensor"``, ``"S0"``
+            Options: ``"3DShore"``, ``"SFM"``, ``"DTI"``, ``"DKI"``, ``"S0"``
 
         Return
         ------
@@ -59,11 +59,8 @@ class ModelFactory:
                 "isotropic": ExponentialIsotropicModel,
             }
 
-        elif model.lower().startswith("tensor"):
-            Model = TensorModel
-
-        elif model.lower().startswith("dki"):
-            Model = DKIModel
+        elif model.lower() in ("dti", "dki"):
+            Model = DTIModel if model.lower() == "dti" else DKIModel
 
         else:
             raise NotImplementedError(f"Unsupported model <{model}>.")
@@ -100,7 +97,7 @@ class TrivialB0Model:
         return self._S0
 
 
-class TensorModel:
+class DTIModel:
     """A wrapper of :obj:`dipy.reconst.dti.TensorModel."""
 
     __slots__ = (
@@ -252,12 +249,20 @@ class DKIModel:
         """Instantiate the wrapped tensor model."""
         from dipy.reconst.dki import DiffusionKurtosisModel
 
-        self._S0 = np.clip(
-            S0.astype("float32") / S0.max(),
-            a_min=1e-5,
-            a_max=1.0,
-        )
+        self._S0 = None
+        if S0 is not None:
+            self._S0 = np.clip(
+                S0.astype("float32") / S0.max(),
+                a_min=1e-5,
+                a_max=1.0,
+            )
         self._mask = mask
+        if mask is None and S0 is not None:
+            self._mask = self._S0 > np.percentile(self._S0, 35)
+
+        if self._mask is not None:
+            self._S0 = self._S0[self._mask.astype(bool)]
+
         kwargs = {
             k: v
             for k, v in kwargs.items()
@@ -275,15 +280,22 @@ class DKIModel:
 
     def fit(self, data, **kwargs):
         """Clean-up permitted args and kwargs, and call model's fit."""
-        self._model = self._model.fit(data, mask=self._mask)
+        self._model = self._model.fit(data[self._mask, ...])
 
-    def predict(self, gradient, step=None, **kwargs):
+    def predict(self, gradient, **kwargs):
         """Propagate model parameters and call predict."""
-        return self._model.predict(
-            _rasb2dipy(gradient),
-            S0=self._S0,
-            step=step,
+        predicted = np.squeeze(
+            self._model.predict(
+                _rasb2dipy(gradient),
+                S0=self._S0,
+            )
         )
+        if predicted.ndim == 3:
+            return predicted
+
+        retval = np.zeros_like(self._mask, dtype="float32")
+        retval[self._mask, ...] = predicted
+        return retval
 
 
 def _rasb2dipy(gradient):
