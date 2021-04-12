@@ -114,7 +114,7 @@ class TensorModel:
 
     def __init__(self, gtab, S0=None, mask=None, **kwargs):
         """Instantiate the wrapped tensor model."""
-        import dipy.reconst.dti as DipyTensorModel
+        from dipy.reconst.dti import TensorModel as DipyTensorModel
 
         for k, v in kwargs.items():
             if k == 'n_threads':
